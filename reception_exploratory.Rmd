@@ -1,0 +1,65 @@
+---
+title: "Receptions Scenarios"
+output: html_notebook
+---
+
+```{r}
+pacman::p_load(tidyverse, googlesheets)
+```
+
+# Load data from google sheet
+```{r}
+reception <- gs_title("Reception Food/Bev")
+food <- gs_read(reception, ws = "food")
+tax <- gs_read(reception, ws = "tax")
+```
+
+# Pricing function
+
+```{r}
+food
+```
+
+```{r}
+item_cost <- function(df, item, units) {
+    unit_price <- df$unit_price[df$item == item]
+    base_cost <- units * unit_price
+    service_charge <- (base_cost * .22) * 1.0753
+    base_cost_tax <- base_cost * 1.0753
+    total_cost <- base_cost_tax + service_charge
+    return(total_cost)
+}
+```
+
+```{r}
+item_cost(food, "Donuts", units = 3)
+```
+
+Pricing one at a time is tedious...Let's price everything at once.
+
+```{r}
+units_df <- tibble(item = food$item,
+                   units = c(1,2,3,4,5,6,7,8,9))
+```
+
+```{r}
+scenario <- food %>%
+    left_join(units_df) %>%
+    mutate(base_cost = units * unit_price) %>%
+    mutate(sc_cost = (base_cost * .22) * 1.0753,
+           base_tax = base_cost * 1.0753) %>%
+    mutate(total_cost = base_cost + sc_cost + base_tax,
+           people_served = people * units)
+```
+
+```{r}
+scenario %>%
+    group_by(category) %>%
+    summarise(total_cost = sum(total_cost), people_served = sum(people_served, na.rm = T))
+```
+
+
+
+
+
+
