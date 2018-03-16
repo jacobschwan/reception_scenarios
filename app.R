@@ -11,6 +11,9 @@ library(shiny)
 library(googlesheets)
 library(tidyverse)
 
+reception <- gs_title("Reception Food/Bev")
+mixed <- gs_read(reception, ws = "mixed")
+
 # Define UI for application that draws a histogram
 ui <- fluidPage(
    
@@ -20,71 +23,9 @@ ui <- fluidPage(
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
       sidebarPanel(
-         sliderInput("hosted",
-                     "Hours of Hosted Booze:",
-                     min = 0,
-                     max = 5,
-                     value = 4),
-         sliderInput("na_bev",
-                     "Hosted NA Bevs:",
-                     min = 0,
-                     max = 300,
-                     value = 300),
-         sliderInput("chips",
-                     "Tortilla Chips:",
-                     min = 0,
-                     max = 10,
-                     value = 5),
-         sliderInput("nuts",
-                     "Mixed Nuts:",
-                     min = 0,
-                     max = 10,
-                     value = 5),
-         sliderInput("t_mix",
-                     "Trail Mix:",
-                     min = 0,
-                     max = 10,
-                     value = 5),
-         sliderInput("dessert_display",
-                     "Dessert Displays:",
-                     min = 0,
-                     max = 20,
-                     value = 5),
-         sliderInput("donuts",
-                     "Donuts:",
-                     min = 0,
-                     max = 30,
-                     value = 20),
-         sliderInput("pizza",
-                     "Pizza:",
-                     min = 0,
-                     max = 50,
-                     value = 20),
-         sliderInput("tenders",
-                     "Chicken Tenders:",
-                     min = 0,
-                     max = 300,
-                     value = 150),
-         sliderInput("tots",
-                     "Tater Tots:",
-                     min = 0,
-                     max = 300,
-                     value = 150),
-         sliderInput("mac",
-                     "Mac & Cheese:",
-                     min = 0,
-                     max = 300,
-                     value = 150),
-         sliderInput("coffee",
-                     "Coffee:",
-                     min = 0,
-                     max = 5,
-                     value = 1),
-         sliderInput("tea",
-                     "Tea:",
-                     min = 0,
-                     max = 5,
-                     value = 1)
+         mixed %>%
+             select(inputId, label, min, max, value) %>%
+             pmap(sliderInput)
       ),
       
       # Show a plot of the generated distribution
@@ -98,49 +39,21 @@ ui <- fluidPage(
 
 # Define server logic required to draw a histogram
 server <- function(input, output) {
-   
-    reception <- gs_title("Reception Food/Bev")
-    food <- gs_read(reception, ws = "unit_based")
-    bev <- gs_read(reception, ws = "hours_based")
-    
-    bev_cost <- reactive({
-        units_bev <- c(input$hosted)
-        
-        bev %>%
-            mutate(units = units_bev,
-                   people_served = 300) %>%
-            mutate(base_cost = first_hour * people_served + (units -1 ) * second_hour * people_served) %>%
-            mutate(sc_cost = (base_cost * .22) * 1.0753,
-                   base_tax = base_cost * tax) %>%
-            mutate(total_cost = base_cost + sc_cost + base_tax)
-    })
     
     item_list <- reactive({
-        units_vec <- c(input$dessert_display,
-                       input$chips,
-                       input$nuts,
-                       input$t_mix,
-                       input$donuts,
-                       input$pizza,
-                       input$tenders,
-                       input$tots,
-                       input$mac,
-                       input$coffee,
-                       input$tea,
-                       input$na_bev)
+        units_vec <- map_dbl(mixed$inputId, function(x) {input[[x]]})
         
-        drink <- bev_cost() %>%
-            select(item, units, unit, total_cost, people_served, category)
-        
-        food %>%
-            mutate(units = units_vec) %>%
-            mutate(base_cost = units * unit_price) %>%
+        mixed %>%
+            mutate(units = units_vec,
+                   people_served = 300) %>%
+            mutate(base_cost = case_when(unit == "hours" ~ 
+                                             people_served*(unit_price_1 + (units -1 ) * unit_price_2),
+                                         TRUE ~ units * unit_price_1)) %>%
             mutate(sc_cost = (base_cost * .22) * 1.0753,
-                   base_tax = base_cost * 0.0753) %>%
+                   base_tax = base_cost * tax) %>%
             mutate(total_cost = base_cost + sc_cost + base_tax,
                    people_served = people * units) %>%
-        select(item, units, unit, total_cost, people_served, category) %>%
-            bind_rows(drink)})
+        select(item = label, units, unit, total_cost, people_served, category)})
     
     output$item_list <- renderTable({item_list() %>%
             select(-category)})
