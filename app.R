@@ -23,7 +23,9 @@ ui <- fluidPage(
    # Sidebar with a slider input for number of bins 
    sidebarLayout(
       sidebarPanel(
-         mixed %>%
+         numericInput("na_bev", "People:", value = 300),
+          mixed %>%
+             filter(input_needed) %>%
              select(inputId, label, min, max, value) %>%
              pmap(sliderInput)
       ),
@@ -45,14 +47,14 @@ server <- function(input, output) {
         
         mixed %>%
             mutate(units = units_vec,
-                   people_served = 300) %>%
+                   people_served = case_when(unit == "hours" ~ as.numeric(input$na_bev),
+                                             TRUE ~ people * units)) %>%
             mutate(base_cost = case_when(unit == "hours" ~ 
                                              people_served*(unit_price_1 + (units -1 ) * unit_price_2),
                                          TRUE ~ units * unit_price_1)) %>%
             mutate(sc_cost = (base_cost * .22) * 1.0753,
                    base_tax = base_cost * tax) %>%
-            mutate(total_cost = base_cost + sc_cost + base_tax,
-                   people_served = people * units) %>%
+            mutate(total_cost = base_cost + sc_cost + base_tax) %>%
         select(item = label, units, unit, total_cost, people_served, category)})
     
     output$item_list <- renderTable({item_list() %>%
